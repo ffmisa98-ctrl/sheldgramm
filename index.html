@@ -1,138 +1,108 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sheldgram</title>
-
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
 <style>
-body{margin:0;font-family:sans-serif;background:#0b0b12;color:#fff}
-#auth,#app{display:none}
-.center{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}
-input,button{padding:10px;margin:5px;border-radius:8px;border:none}
-button{background:#4f46e5;color:white;font-weight:bold}
-#chatList{width:30%;background:#111;padding:10px}
-#chat{flex:1;display:flex;flex-direction:column}
-#messages{flex:1;overflow:auto;padding:10px}
-.msg{margin:6px 0}
-.me{text-align:right;color:#22d3ee}
-.top{display:flex;justify-content:space-between;align-items:center;background:#111;padding:10px}
-.row{display:flex;height:100vh}
-#sendBox{display:flex}
-#sendBox input{flex:1}
+body {
+  margin: 0;
+  background:#111;
+  color:#fff;
+  font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto;
+}
+header {
+  padding:15px;
+  font-size:22px;
+  font-weight:600;
+  background:#1c1c1c;
+}
+#login, #app {
+  padding:20px;
+}
+input, button {
+  width:100%;
+  padding:14px;
+  margin-top:10px;
+  border:none;
+  border-radius:12px;
+  font-size:16px;
+}
+button {
+  background:#2aa8ff;
+  color:#000;
+  font-weight:600;
+}
+.chat {
+  display:flex;
+  align-items:center;
+  padding:12px;
+  border-bottom:1px solid #222;
+}
+.avatar {
+  width:48px;
+  height:48px;
+  border-radius:50%;
+  background:#444;
+  margin-right:12px;
+}
+.chat-info {
+  flex:1;
+}
+.chat-name {
+  font-weight:600;
+}
+.chat-last {
+  color:#aaa;
+  font-size:14px;
+}
+.time {
+  color:#888;
+  font-size:12px;
+}
 </style>
 </head>
 <body>
 
-<div id="auth" class="center">
-  <h2>Sheldgram</h2>
-  <input id="nick" placeholder="Ник">
-  <input id="pass" type="password" placeholder="Пароль">
-  <button id="loginBtn">Вход / Регистрация</button>
-  <div id="authMsg"></div>
+<header>Sheldgram</header>
+
+<div id="login">
+  <input id="nick" placeholder="Введите ник">
+  <button onclick="saveNick()">Продолжить</button>
 </div>
 
-<div id="app">
-  <div class="top">
-    <span id="me"></span>
-    <button id="logout">Выйти</button>
-  </div>
-  <div class="row">
-    <div id="chatList">
-      <div onclick="openChat('global')">🌍 Общий чат</div>
-      <div onclick="openChat('test')">🧪 Тестовый чат</div>
+<div id="app" style="display:none;">
+  <div class="chat">
+    <div class="avatar"></div>
+    <div class="chat-info">
+      <div class="chat-name">Общий чат</div>
+      <div class="chat-last">Добро пожаловать</div>
     </div>
-    <div id="chat">
-      <div id="messages"></div>
-      <div id="sendBox">
-        <input id="text" placeholder="Сообщение">
-        <button id="send">➤</button>
-      </div>
-    </div>
+    <div class="time">now</div>
   </div>
 </div>
 
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyCMX9CJ_pdfWSHfjOQxNgOI3nVV9TKQQL0",
-  authDomain: "sheldgram.firebaseapp.com",
-  databaseURL: "https://sheldgram-default-rtdb.firebaseio.com",
-  projectId: "sheldgram",
-  storageBucket: "sheldgram.firebasestorage.app",
-  messagingSenderId: "1043405821108",
-  appId: "1:1043405821108:web:5f6cd85ab9879c9494b3e1"
-};
-firebase.initializeApp(firebaseConfig);
-const auth=firebase.auth();
-const db=firebase.database();
-
-let user=null,chat="global",sending=false;
-
-const authDiv=document.getElementById("auth");
-const appDiv=document.getElementById("app");
-
-document.getElementById("loginBtn").onclick=()=>{
-  const n=nick.value.trim();
-  const p=pass.value;
-  if(!n||!p)return authMsg.textContent="Заполни поля";
-  auth.signInWithEmailAndPassword(n+"@sheld.dev",p)
-    .catch(()=>auth.createUserWithEmailAndPassword(n+"@sheld.dev",p))
-    .then(res=>{
-      user=res.user;
-      db.ref("users/"+user.uid).set({nick:n});
-    });
-};
-
-auth.onAuthStateChanged(u=>{
-  if(u){
-    user=u;
-    authDiv.style.display="none";
-    appDiv.style.display="block";
-    db.ref("users/"+u.uid+"/nick").once("value",s=>me.textContent=s.val());
-    openChat(chat);
-  }else{
-    appDiv.style.display="none";
-    authDiv.style.display="flex";
-  }
-});
-
-document.getElementById("logout").onclick=()=>auth.signOut();
-
-function openChat(c){
-  chat=c;
-  messages.innerHTML="";
-  db.ref("chats/"+chat).off();
-  db.ref("chats/"+chat).limitToLast(100).on("child_added",s=>{
-    const d=s.val();
-    const div=document.createElement("div");
-    div.className="msg "+(d.uid===user.uid?"me":"");
-    div.textContent=d.nick+": "+d.text;
-    messages.appendChild(div);
-    messages.scrollTop=messages.scrollHeight;
-  });
+function saveNick() {
+  const nick = document.getElementById('nick').value.trim();
+  if(!nick) return alert("Введите ник");
+  localStorage.setItem("nickname", nick);
+  start();
 }
 
-document.getElementById("send").onclick=()=>{
-  if(sending)return;
-  const t=text.value.trim();
-  if(!t)return;
-  sending=true;
-  db.ref("users/"+user.uid+"/nick").once("value",s=>{
-    db.ref("chats/"+chat).push({
-      uid:user.uid,
-      nick:s.val(),
-      text:t,
-      time:Date.now()
-    }).then(()=>{
-      text.value="";
-      sending=false;
-    });
-  });
-};
+function start() {
+  const nick = localStorage.getItem("nickname");
+  if(!nick || nick==="undefined") {
+    document.getElementById("login").style.display="block";
+    document.getElementById("app").style.display="none";
+  } else {
+    document.getElementById("login").style.display="none";
+    document.getElementById("app").style.display="block";
+  }
+}
+start();
 </script>
+
 </body>
 </html>
