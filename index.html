@@ -3,95 +3,74 @@
 <head>
 <meta charset="UTF-8">
 <title>Sheldgram</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
-body{margin:0;font-family:system-ui;background:#111;color:#fff}
-.screen{display:none;padding:20px}
-.screen.active{display:block}
-input,button{width:100%;padding:14px;border-radius:12px;border:none;margin:8px 0;font-size:16px}
-button{background:#2ea6ff;color:#fff;font-weight:600}
-.chat{padding:12px;border-bottom:1px solid #222;cursor:pointer}
+body{margin:0;background:#111;color:#fff;font-family:Arial}
+.container{max-width:420px;margin:auto;padding:20px}
+input,button{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:none;font-size:16px}
+button{background:#2ea6ff;color:#fff;font-weight:bold}
+.chat{border-bottom:1px solid #222;padding:12px}
+.hidden{display:none}
 </style>
 </head>
 <body>
 
-<div id="auth" class="screen active">
+<div class="container" id="auth">
   <h2>Sheldgram</h2>
+  <input id="nick" placeholder="Ник">
   <input id="email" placeholder="Email">
-  <input id="password" type="password" placeholder="Пароль">
-  <input id="nick" placeholder="Ник (для регистрации)">
-  <button onclick="login()">Войти</button>
+  <input id="pass" type="password" placeholder="Пароль">
   <button onclick="register()">Регистрация</button>
+  <button onclick="login()">Войти</button>
 </div>
 
-<div id="chats" class="screen">
-  <h3>Чаты</h3>
-  <div id="chatList"></div>
+<div class="container hidden" id="app">
+  <h3 id="me"></h3>
   <button onclick="logout()">Выйти</button>
+  <div id="chats"></div>
 </div>
 
 <script>
 const firebaseConfig = {
-  apiKey: "PASTE_KEY",
-  authDomain: "PASTE_DOMAIN",
-  projectId: "PASTE_ID"
+  apiKey: "AIzaSyCMX9CJ_pdfWSHfjOQxNgOI3nVV9TKQQL0",
+  authDomain: "sheldgram.firebaseapp.com",
+  databaseURL: "https://sheldgram-default-rtdb.firebaseio.com",
+  projectId: "sheldgram",
+  storageBucket: "sheldgram.firebasestorage.app",
+  messagingSenderId: "1043405821108",
+  appId: "1:1043405821108:web:5f6cd85ab9879c9494b3e1"
 };
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+const auth=firebase.auth();
+const db=firebase.firestore();
 
-function show(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-}
-
-function login(){
-  auth.signInWithEmailAndPassword(
-    email.value.trim(),
-    password.value
-  ).catch(e=>alert(e.message));
-}
-
-function register(){
-  if(!nick.value) return alert("Введи ник");
-  auth.createUserWithEmailAndPassword(
-    email.value.trim(),
-    password.value
-  ).then(cred=>{
-    return cred.user.updateProfile({displayName:nick.value});
-  }).catch(e=>alert(e.message));
-}
-
-function logout(){
-  auth.signOut();
-}
-
-auth.onAuthStateChanged(user=>{
-  if(user){
-    show('chats');
-    loadChats();
-  }else{
-    show('auth');
-  }
+auth.onAuthStateChanged(u=>{
+ if(u){
+  document.getElementById("auth").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  document.getElementById("me").innerText=u.displayName;
+  loadChats();
+ }
 });
 
+function register(){
+ const e=email.value,p=pass.value,n=nick.value;
+ auth.createUserWithEmailAndPassword(e,p).then(r=>{
+  r.user.updateProfile({displayName:n});
+  db.collection("users").doc(r.user.uid).set({nick:n});
+ });
+}
+function login(){
+ auth.signInWithEmailAndPassword(email.value,pass.value);
+}
+function logout(){auth.signOut();}
+
 function loadChats(){
-  chatList.innerHTML="";
-  db.collection("chats").orderBy("last","desc").onSnapshot(snap=>{
-    chatList.innerHTML="";
-    snap.forEach(d=>{
-      const c=d.data();
-      const div=document.createElement("div");
-      div.className="chat";
-      div.textContent=c.title || "Чат";
-      chatList.appendChild(div);
-    });
-  });
+ chats.innerHTML="<div class='chat'>Общий чат</div>";
 }
 </script>
-
 </body>
 </html>
