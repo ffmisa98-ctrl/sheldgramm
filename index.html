@@ -2,74 +2,167 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Sheldgram</title>
+<title>Sheldgram v1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
-body{margin:0;background:#111;color:#fff;font-family:Arial}
-.container{max-width:420px;margin:auto;padding:20px}
-input,button{width:100%;padding:12px;margin:8px 0;border-radius:8px;border:none;font-size:16px}
-button{background:#2ea6ff;color:#fff;font-weight:bold}
-.chat{border-bottom:1px solid #222;padding:12px}
+body{margin:0;font-family:system-ui;background:#0f172a;color:#e5e7eb}
 .hidden{display:none}
+header{padding:12px;background:#020617;font-weight:700;text-align:center}
+#auth,#app{padding:16px;max-width:500px;margin:auto}
+input,button{width:100%;padding:12px;margin:6px 0;border-radius:10px;border:none;font-size:15px}
+button{background:#22d3ee;color:#000;font-weight:700}
+.chat{padding:10px;border-bottom:1px solid #1e293b;cursor:pointer}
+.msg{margin:6px 0;padding:8px;border-radius:10px;background:#1e293b}
+.me{background:#22d3ee;color:#000;align-self:flex-end}
+.reply{font-size:12px;opacity:.7}
+#messages{display:flex;flex-direction:column}
 </style>
 </head>
 <body>
 
-<div class="container" id="auth">
-  <h2>Sheldgram</h2>
-  <input id="nick" placeholder="Ник">
-  <input id="email" placeholder="Email">
-  <input id="pass" type="password" placeholder="Пароль">
-  <button onclick="register()">Регистрация</button>
-  <button onclick="login()">Войти</button>
+<header>Sheldgram</header>
+
+<div id="auth">
+ <input id="email" placeholder="Email">
+ <input id="pass" type="password" placeholder="Пароль">
+ <input id="nick" placeholder="Ник (для регистрации)">
+ <button onclick="login()">Войти</button>
+ <button onclick="register()">Регистрация</button>
 </div>
 
-<div class="container hidden" id="app">
-  <h3 id="me"></h3>
+<div id="app" class="hidden">
+ <div>
+  <b id="me"></b>
   <button onclick="logout()">Выйти</button>
-  <div id="chats"></div>
+ </div>
+
+ <input id="search" placeholder="Поиск по нику">
+ <div id="users"></div>
+
+ <h3>Чаты</h3>
+ <div id="chats"></div>
+
+ <div id="chatView" class="hidden">
+  <h3 id="chatTitle"></h3>
+  <div id="messages"></div>
+  <div id="replyBox" class="hidden"></div>
+  <input id="text" placeholder="Сообщение">
+  <button onclick="send()">Отправить</button>
+ </div>
 </div>
 
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyCMX9CJ_pdfWSHfjOQxNgOI3nVV9TKQQL0",
-  authDomain: "sheldgram.firebaseapp.com",
-  databaseURL: "https://sheldgram-default-rtdb.firebaseio.com",
-  projectId: "sheldgram",
-  storageBucket: "sheldgram.firebasestorage.app",
-  messagingSenderId: "1043405821108",
-  appId: "1:1043405821108:web:5f6cd85ab9879c9494b3e1"
+const firebaseConfig={
+ apiKey:"AIzaSyCMX9CJ_pdfWSHfjOQxNgOI3nVV9TKQQL0",
+ authDomain:"sheldgram.firebaseapp.com",
+ projectId:"sheldgram"
 };
 firebase.initializeApp(firebaseConfig);
 const auth=firebase.auth();
 const db=firebase.firestore();
 
+let me=null,currentChat=null,replyTo=null,unsub=null;
+
 auth.onAuthStateChanged(u=>{
  if(u){
+  me=u;
   document.getElementById("auth").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
   document.getElementById("me").innerText=u.displayName;
   loadChats();
+ }else{
+  document.getElementById("auth").classList.remove("hidden");
+  document.getElementById("app").classList.add("hidden");
  }
 });
 
 function register(){
- const e=email.value,p=pass.value,n=nick.value;
- auth.createUserWithEmailAndPassword(e,p).then(r=>{
-  r.user.updateProfile({displayName:n});
-  db.collection("users").doc(r.user.uid).set({nick:n});
+ auth.createUserWithEmailAndPassword(email.value,pass.value)
+ .then(r=>{
+  r.user.updateProfile({displayName:nick.value});
+  db.collection("users").doc(r.user.uid).set({nick:nick.value});
  });
 }
-function login(){
- auth.signInWithEmailAndPassword(email.value,pass.value);
+function login(){auth.signInWithEmailAndPassword(email.value,pass.value)}
+function logout(){auth.signOut()}
+
+search.oninput=()=>{
+ const q=search.value.trim();
+ if(!q){users.innerHTML="";return;}
+ db.collection("users").where("nick","==",q).get().then(s=>{
+  users.innerHTML="";
+  s.forEach(d=>{
+   const div=document.createElement("div");
+   div.className="chat";
+   div.textContent=d.data().nick;
+   div.onclick=()=>openPrivate(d.id,d.data().nick);
+   users.appendChild(div);
+  });
+ });
+};
+
+function chatId(a,b){return [a,b].sort().join("_")}
+
+function openPrivate(uid,nick){
+ currentChat=chatId(me.uid,uid);
+ chatTitle.innerText=nick;
+ chatView.classList.remove("hidden");
+ loadMessages();
 }
-function logout(){auth.signOut();}
 
 function loadChats(){
- chats.innerHTML="<div class='chat'>Общий чат</div>";
+ db.collection("chats").where("members","array-contains",me.uid)
+ .onSnapshot(s=>{
+  chats.innerHTML="";
+  s.forEach(d=>{
+   const div=document.createElement("div");
+   div.className="chat";
+   div.textContent=d.data().title;
+   div.onclick=()=>{
+    currentChat=d.id;
+    chatTitle.innerText=d.data().title;
+    chatView.classList.remove("hidden");
+    loadMessages();
+   };
+   chats.appendChild(div);
+  });
+ });
+}
+
+function loadMessages(){
+ if(unsub)unsub();
+ messages.innerHTML="";
+ unsub=db.collection("messages").where("chat","==",currentChat)
+ .orderBy("time")
+ .onSnapshot(s=>{
+  messages.innerHTML="";
+  s.forEach(d=>{
+   const m=d.data();
+   const div=document.createElement("div");
+   div.className="msg"+(m.uid==me.uid?" me":"");
+   if(m.reply)div.innerHTML="<div class='reply'>↩ "+m.reply+"</div>";
+   div.innerHTML+=m.text;
+   div.onclick=()=>{replyTo=m.text;replyBox.textContent="Ответ: "+m.text;replyBox.classList.remove("hidden");};
+   messages.appendChild(div);
+  });
+ });
+}
+
+function send(){
+ if(!text.value)return;
+ db.collection("messages").add({
+  chat:currentChat,
+  uid:me.uid,
+  text:text.value,
+  reply:replyTo||"",
+  time:firebase.firestore.FieldValue.serverTimestamp()
+ });
+ replyTo=null;
+ replyBox.classList.add("hidden");
+ text.value="";
 }
 </script>
 </body>
