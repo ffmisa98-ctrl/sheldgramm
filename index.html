@@ -2,93 +2,96 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sheldgram</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <style>
-body{margin:0;background:#0e1621;color:#fff;font-family:Inter}
-header{padding:14px 16px;font-size:18px;font-weight:600;border-bottom:1px solid #1f2a36}
-#login,#app{display:none}
-.container{padding:16px}
-input,button{width:100%;padding:14px;border-radius:10px;border:none;font-size:16px}
-input{margin-bottom:12px;background:#17212b;color:#fff}
-button{background:#2aabee;color:#fff;font-weight:600}
-.chat{display:flex;gap:12px;padding:12px;border-bottom:1px solid #1f2a36;cursor:pointer}
-.avatar{width:48px;height:48px;border-radius:50%;background:#2aabee;display:flex;align-items:center;justify-content:center;font-weight:600}
-.chat-title{font-weight:600}
-.chat-last{font-size:13px;color:#9aa4af}
+body{margin:0;font-family:system-ui;background:#111;color:#fff}
+.screen{display:none;padding:20px}
+.screen.active{display:block}
+input,button{width:100%;padding:14px;border-radius:12px;border:none;margin:8px 0;font-size:16px}
+button{background:#2ea6ff;color:#fff;font-weight:600}
+.chat{padding:12px;border-bottom:1px solid #222;cursor:pointer}
 </style>
 </head>
 <body>
 
-<header>Sheldgram</header>
-
-<div id="login" class="container">
-<input id="nickname" placeholder="Ник">
-<input id="email" placeholder="Email">
-<input id="password" type="password" placeholder="Пароль">
-<button onclick="register()">Войти / Регистрация</button>
+<div id="auth" class="screen active">
+  <h2>Sheldgram</h2>
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Пароль">
+  <input id="nick" placeholder="Ник (для регистрации)">
+  <button onclick="login()">Войти</button>
+  <button onclick="register()">Регистрация</button>
 </div>
 
-<div id="app">
-<div id="chats"></div>
+<div id="chats" class="screen">
+  <h3>Чаты</h3>
+  <div id="chatList"></div>
+  <button onclick="logout()">Выйти</button>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
+<script>
 const firebaseConfig = {
   apiKey: "PASTE_KEY",
   authDomain: "PASTE_DOMAIN",
-  projectId: "PASTE_ID",
+  projectId: "PASTE_ID"
 };
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
 
-window.register = async () => {
-  const email = email.value;
-  const password = document.getElementById('password').value;
-  const nick = document.getElementById('nickname').value;
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(cred.user, { displayName: nick });
-  } catch {
-    await signInWithEmailAndPassword(auth, email, password);
+function login(){
+  auth.signInWithEmailAndPassword(
+    email.value.trim(),
+    password.value
+  ).catch(e=>alert(e.message));
+}
+
+function register(){
+  if(!nick.value) return alert("Введи ник");
+  auth.createUserWithEmailAndPassword(
+    email.value.trim(),
+    password.value
+  ).then(cred=>{
+    return cred.user.updateProfile({displayName:nick.value});
+  }).catch(e=>alert(e.message));
+}
+
+function logout(){
+  auth.signOut();
+}
+
+auth.onAuthStateChanged(user=>{
+  if(user){
+    show('chats');
+    loadChats();
+  }else{
+    show('auth');
   }
-};
-
-onAuthStateChanged(auth, user => {
-  if(!user){
-    login.style.display='block';
-    app.style.display='none';
-    return;
-  }
-  login.style.display='none';
-  app.style.display='block';
-  loadChats(user.uid);
 });
 
-function loadChats(uid){
-  const q = query(collection(db,"chats"), where("members","array-contains",uid), orderBy("updatedAt","desc"));
-  onSnapshot(q,snap=>{
-    chats.innerHTML='';
+function loadChats(){
+  chatList.innerHTML="";
+  db.collection("chats").orderBy("last","desc").onSnapshot(snap=>{
+    chatList.innerHTML="";
     snap.forEach(d=>{
       const c=d.data();
-      const div=document.createElement('div');
-      div.className='chat';
-      div.innerHTML=`<div class="avatar">${c.title[0]}</div>
-      <div>
-        <div class="chat-title">${c.title}</div>
-        <div class="chat-last">${c.lastMessage||''}</div>
-      </div>`;
-      chats.appendChild(div);
+      const div=document.createElement("div");
+      div.className="chat";
+      div.textContent=c.title || "Чат";
+      chatList.appendChild(div);
     });
   });
 }
 </script>
+
 </body>
 </html>
